@@ -2,19 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import base64
-import IPython
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
-import PIL.Image
-import pyvirtualdisplay
-import reverb
-
 import time
 import datetime
-import tensorflow as tf
 
+import reverb
+import tensorflow as tf
 from tf_agents.agents.dqn import dqn_agent
 from tf_agents.drivers import py_driver
 from tf_agents.environments import suite_gym
@@ -149,7 +142,7 @@ py_driver.PyDriver(
     max_steps=initial_collect_steps).run(train_py_env.reset())
 
 iterator = iter(replay_buffer.as_dataset(
-    num_parallel_calls=4,
+    num_parallel_calls=12,
     sample_batch_size=batch_size,
     num_steps=2).prefetch(5))
 
