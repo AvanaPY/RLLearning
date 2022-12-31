@@ -1,0 +1,13 @@
+dm_reverb==0.10.0
+imageio==2.4.0
+ipython==8.7.0
+keras==2.11.0
+matplotlib==3.6.2
+numpy==1.23.0
+opencv_python==4.6.0.66
+Pillow==9.3.0
+pygame==2.1.0
+PyVirtualDisplay==3.0
+reverb==2.0.1
+tensorflow==2.11.0
+tf_agents==0.15.0
