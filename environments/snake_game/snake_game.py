@@ -177,6 +177,9 @@ class PySnakeGameEnv(py_environment.PyEnvironment):
         )
         self._episode_ended = False
         
+    def deep_copy(self):
+        raise NotImplementedError(f'Deep copying of {self} is not implemented')
+
     def action_spec(self):
         return self._action_spec
 
@@ -326,6 +329,12 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
         self._TAIL_TOKEN = 2
         self._FOOD_TOKEN = 3
 
+    def deep_copy(self):
+        return ConvPySnakeGameEnv(
+            self._game._board_shape,
+            self._game._life_updater
+        )
+
     def _get_state(self):
         state = np.zeros(shape=self._game._board_shape, dtype=np.float32)
         
@@ -358,6 +367,15 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
         for ty, tx in self._game._state:
             image[ty*block_size[0]:(ty+1)*block_size[0],tx*block_size[1]:(tx+1)*block_size[1]] = TAIL_COLOUR
 
+        # Render what he can see
+        state = self._get_state()
+        h, w, _ = state.shape
+        hy, hx = self._game.head
+        miny, minx = hy - h // 2    , hx - w // 2
+        maxy, maxx = hy + h // 2 + 1, hx + w // 2 + 1
+        image = cv2.rectangle(image, (minx * block_size[1], miny * block_size[0]), (maxx * block_size[1], maxy * block_size[0]), (255, 0, 0), 1) 
+        
+        # Some cool text
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.5
         text_colour = (255, 255, 255)
@@ -369,14 +387,7 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
                                 (20, 20), 
                                 font, font_scale, text_colour, 1, cv2.LINE_AA)
         
-        state = (self._get_state()*3).astype(np.int32).squeeze()
-        hy, hx = self._game.head
-        h, w = state.shape
-
-        miny, minx = hy - h // 2    , hx - w // 2
-        maxy, maxx = hy + h // 2 + 1, hx + w // 2 + 1
-        image = cv2.rectangle(image, (minx * block_size[1], miny * block_size[0]), (maxx * block_size[1], maxy * block_size[0]), (255, 0, 0), 1) 
-        
+        # This is fucking bad design man
         if rotate:
             image = np.rot90(image, k=1, axes=(0,1))
             image = np.flip(image, axis=0)

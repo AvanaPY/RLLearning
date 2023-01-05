@@ -14,14 +14,14 @@ from tf_agents.environments import tf_environment
 from tf_agents.environments import tf_py_environment
 from tf_agents.policies import PolicySaver
 try:
-    from my_policy_saver import MyPolicySaver
-    from my_checkpointer import MyCheckpointer
+    from utils.my_policy_saver import MyPolicySaver
+    from utils.my_checkpointer import MyCheckpointer
     from model_config import ModelConfig
     from model_config import LinearModelConfig
     from model_config import ConvModelConfig, ConvLayerParameter
 except ModuleNotFoundError:
-    from .my_policy_saver import MyPolicySaver
-    from .my_checkpointer import MyCheckpointer
+    from utils.my_policy_saver import MyPolicySaver
+    from utils.my_checkpointer import MyCheckpointer
     from .model_config import ModelConfig, LinearModelConfig, ConvModelConfig, ConvLayerParameter
 
 def build_model(layer_params, num_actions):

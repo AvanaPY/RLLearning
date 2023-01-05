@@ -34,20 +34,21 @@ from model import create_checkpointer
 from model import get_policy_saver
 from model.model_config import LinearModelConfig
 from model.model_config import ConvModelConfig, ConvLayerParameter
+from utils.helpers import load_checkpoint_from_path
 
 print(f'TF version = {tf.version.VERSION}')
 
 num_iterations = 1_000_000
 
-initial_collect_steps       = 500
-collect_steps_per_iteration = 4
+initial_collect_steps       = 1000
+collect_steps_per_iteration = 1
 replay_buffer_max_length    = 100000
 
 batch_size    = 32
-learning_rate = 1e-4
-log_interval  = 200
+learning_rate = 1e-6
+log_interval  = 500
 
-checkpoint_interval = 1000
+checkpoint_interval = 5000
 
 board_shape = (32, 32)
 # train_py_env = PySnakeGameEnv(
@@ -57,40 +58,52 @@ board_shape = (32, 32)
 #     board_shape,
 #     ResetWhenAppleEatenLifeUpdater(400))
 
-train_py_env = ConvPySnakeGameEnv(
-    board_shape=board_shape,
-    life_updater=ResetWhenAppleEatenLifeUpdater(400))
-eval_py_env  = ConvPySnakeGameEnv(
-    board_shape=board_shape,
-    life_updater=ResetWhenAppleEatenLifeUpdater(400))
+# Define or load in the model
+model_path = 'ckpts/2022_12_31__15_25_27'
+if model_path:
+    model_config, train_py_env, train_env, agent, checkpointer = load_checkpoint_from_path(model_path) 
+    global_step = tf.compat.v1.train.get_global_step()
+    eval_py_env = train_py_env.deep_copy()
+    eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
+    model_name = os.path.split(model_path)[1]
+    ckpt_dir = model_path
+else:
+    train_py_env = ConvPySnakeGameEnv(
+        board_shape=board_shape,
+        life_updater=ResetWhenAppleEatenLifeUpdater(400))
+    eval_py_env = train_py_env.deep_copy()
 
-train_env = tf_py_environment.TFPyEnvironment(train_py_env)
-eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
+    train_env = tf_py_environment.TFPyEnvironment(train_py_env)
+    eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-action_tensor_spec = tensor_spec.from_spec(train_py_env.action_spec())
-num_actions = action_tensor_spec.maximum - action_tensor_spec.minimum + 1
+    action_tensor_spec = tensor_spec.from_spec(train_py_env.action_spec())
+    num_actions = action_tensor_spec.maximum - action_tensor_spec.minimum + 1
 
-# model_config = LinearModelConfig(28, [1024, 256], int(num_actions))
-model_config = ConvModelConfig(
-    train_py_env.observation_spec().shape,
-    [
-        ConvLayerParameter('conv2d', 8, (3, 3), (1, 1), (0, 0), 'relu'),
-        ConvLayerParameter('conv2d', 16, (5, 5), (1, 1), (0, 0), 'relu'),
-        ConvLayerParameter('conv2d', 32, (5, 5), (1, 1), (0, 0), 'relu'),
-        ConvLayerParameter('flatten', None, None, None, None, None),
-        ConvLayerParameter('dense', 32, None, None, None, 'relu')
-    ],
-    int(num_actions)
-)
+    # model_config = LinearModelConfig(28, [1024, 256], int(num_actions))
+    model_config = ConvModelConfig(
+        train_py_env.observation_spec().shape,
+        [
+            ConvLayerParameter('conv2d', 32, (5, 5), (2, 2), (0, 0), 'relu'),
+            ConvLayerParameter('conv2d', 32, (7, 7), (2, 2), (0, 0), 'relu'),
+            ConvLayerParameter('conv2d', 32, (3, 3), (1, 1), (0, 0), 'relu'),
+            ConvLayerParameter('conv2d', 32, (3, 3), (1, 1), (0, 0), 'relu'),
+            ConvLayerParameter('flatten', None, None, None, None, None),
+            ConvLayerParameter('dense', 32, None, None, None, 'relu'),
+            ConvLayerParameter('dense', 256, None, None, None, 'relu'),
+            ConvLayerParameter('dense', 32, None, None, None, 'relu'),
+        ],
+        int(num_actions)
+    )
 
-global_step = tf.compat.v1.train.get_or_create_global_step()
-agent = get_agent(model_config, train_env, learning_rate)
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+    agent, qnet = get_agent(model_config, train_env, learning_rate, return_q_net=True)
+    qnet.summary()
 
-# Reset the environment.
-model_name = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
+    model_name = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
-# Create the checkpointer
-ckpt_dir = os.path.join('ckpts', model_name)
+    # Create the checkpointer
+    ckpt_dir = os.path.join('ckpts', model_name)
+
 checkpointer = create_checkpointer(
     ckpt_dir=ckpt_dir,
     agent=agent,
@@ -156,7 +169,7 @@ collect_driver = py_driver.PyDriver(
 
 previous_reward = -np.inf
 time_step = train_py_env.reset()
-for _ in range(num_iterations):
+for iteration in range(1, num_iterations + 1):
 
     # Collect a few steps and save to the replay buffer.
     time_step, _ = collect_driver.run(time_step)
@@ -168,7 +181,7 @@ for _ in range(num_iterations):
     step = agent.train_step_counter.numpy()
 
     if step % log_interval == 0:
-        print(f'step = {step:8d}: loss = {train_loss:7.3f}')
+        print(f'Iteration {iteration}; Step {step:8d}: loss = {train_loss:7.3f}')
 
     if step % checkpoint_interval == 0:
         episode_model_name = f'policy_iter_{step}'

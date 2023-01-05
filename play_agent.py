@@ -1,7 +1,6 @@
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import argparse
-
-from model.my_checkpointer import MyCheckpointLoader
 
 from environments.snake_game import PySnakeGameEnv, ConvPySnakeGameEnv
 from environments.snake_game.life_updater import ResetWhenAppleEatenLifeUpdater 
@@ -9,46 +8,13 @@ from environments.snake_game.life_updater import AdditiveWhenAppleEatenLifeUpdat
 from environments.snake_game.life_updater import ScoreMultiplyWhenAppleEatenLifeUpdater
 from environments.snake_game.life_updater import InfiniteLifeUpdater
 
-from model import load_model
-from model import get_agent
-from model import create_checkpointer
 from model.model_config import ModelConfig
 from model.model_config import LinearModelConfig
 from model.model_config import ConvModelConfig
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-def get_pyenvironment_from_model_config(model_config : ModelConfig):
-    if isinstance(model_config, LinearModelConfig):
-        # Create environment
-        return PySnakeGameEnv(
-            boardsize,
-            ResetWhenAppleEatenLifeUpdater(500)
-        )
-    elif isinstance(model_config, ConvModelConfig):
-        model_config : ConvModelConfig = model_config
-        return ConvPySnakeGameEnv(
-            board_shape=(32, 32),
-            life_updater=ResetWhenAppleEatenLifeUpdater(500)
-        )
-    else:
-        raise RuntimeError(f'Unknown ModelConfig: {model_config}')
-
-def get_policy_from_model_config(model_config : ModelConfig):
-    global_step = tf.compat.v1.train.get_or_create_global_step()
-    agent, q_net = get_agent(model_config, tf_env, 1e-3, return_q_net=True)
-    checkpointer = MyCheckpointLoader(
-        ckpt_dir=ckpt_path,
-        agent=agent,
-        global_step=global_step,
-        max_to_keep=1,
-        model_config=model_config
-    )
-
-    q_net.summary()
-
-    return agent.policy, checkpointer
-
+from utils.my_checkpointer import MyCheckpointLoader
+from utils.helpers import load_checkpoint_from_path
+from utils.helpers import get_policy_from_model_config, get_pyenvironment_from_model_config
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -62,6 +28,7 @@ if __name__ == '__main__':
     FRAME_RATE = args.framerate
     boardsize = (args.boardsize, args.boardsize)
     windowsize = (args.winsize, args.winsize)
+    w, h = windowsize
     model_folder = args.modelfolder
     model_name = args.modelname
     model_path = os.path.join(model_folder, model_name)
@@ -79,7 +46,7 @@ if __name__ == '__main__':
     # Init pygame
     pygame.init()
     pygame.font.init()
-    font = pygame.font.SysFont('arial', 30)
+    font = pygame.font.SysFont('arial', 15)
     display = pygame.display.set_mode(windowsize)
     surf = pygame.surface.Surface(display.get_size())
     clock = pygame.time.Clock()
@@ -88,13 +55,11 @@ if __name__ == '__main__':
     ckpt_dir = args.modelfolder
     ckpt_name = args.modelname
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
-    model_config : ModelConfig = ModelConfig.load_config(
-        os.path.join(ckpt_path, 'config.json'))
 
-    # Load the correct environment for the model
-    env = get_pyenvironment_from_model_config(model_config)
-    tf_env = tf_py_environment.TFPyEnvironment(env)
-    policy, checkpointer = get_policy_from_model_config(model_config)
+    model_config, env, tf_env, agent, checkpointer = load_checkpoint_from_path(ckpt_path)
+    global_step = tf.compat.v1.train.get_global_step()
+    step_counter = agent.train_step_counter
+    policy = agent.policy
 
     # Play the policy
     timestep = tf_env.reset()
@@ -108,6 +73,11 @@ if __name__ == '__main__':
 
         display.fill((0, 0, 0))
         display.blit(surf, (0, 0))
+
+        train_steps = step_counter.numpy()
+        steps_surface = font.render(f'Total train steps: {train_steps}', True, (255, 255, 255))
+        display.blit(steps_surface, (20, h - 20))
+
         pygame.display.flip()
 
         for event in pygame.event.get():
