@@ -37,6 +37,11 @@ Point = namedtuple('Point', 'y, x')
 def opposite_direction(direction : Direction):
     return [Direction.LEFT, Direction.UP, Direction.RIGHT, Direction.DOWN][direction]
 
+def ensure_odd(value : int, offset : int):
+    if value % 2 == 0:
+        return value + offset
+    return value
+
 class SnakeGame:
     def __init__(self,  board_shape : Tuple[int] = (16, 10), 
                         life_updater : BaseLifeUpdater = None) -> None:
@@ -163,7 +168,13 @@ class SnakeGame:
         print(' ' + '\u203e' * self._board_shape[1] * 2 + ' ')
 
 class PySnakeGameEnv(py_environment.PyEnvironment):
-    def __init__(self, board_shape : Tuple[int] = (16, 16), life_updater:BaseLifeUpdater=None):
+    def __init__(self, board_shape : Tuple[int], 
+                 life_updater:BaseLifeUpdater,
+                 discount:float,
+                 reward_on_death:float,
+                 reward_on_apple:float,
+                 reward_on_step_closer:float,
+                 reward_on_step_further:float):
         super().__init__()
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(), dtype=np.int32, minimum=0, maximum=3, name='action'
@@ -176,6 +187,12 @@ class PySnakeGameEnv(py_environment.PyEnvironment):
             life_updater=life_updater
         )
         self._episode_ended = False
+        self._discount = discount
+        
+        self._reward_on_death = reward_on_death
+        self._reward_on_apple = reward_on_apple
+        self._reward_on_step_closer = reward_on_step_closer
+        self._reward_on_step_further = reward_on_step_further
         
     def deep_copy(self):
         raise NotImplementedError(f'Deep copying of {self} is not implemented')
@@ -269,20 +286,20 @@ class PySnakeGameEnv(py_environment.PyEnvironment):
             ActionResult.RAN_OUT_OF_TIME
         ]
         terminating_rewards = {
-            ActionResult.SELF_COLLISION :  -5,
-            ActionResult.WALL_COLLISION :  -5,
-            ActionResult.RAN_OUT_OF_TIME : -10
+            ActionResult.SELF_COLLISION :  self._reward_on_death,
+            ActionResult.WALL_COLLISION :  self._reward_on_death,
+            ActionResult.RAN_OUT_OF_TIME : self._reward_on_death
         }
         if result in terminating:
             self._episode_ended = True
             reward = terminating_rewards[result]
             return ts.termination(self._get_state(), reward=reward)
         elif result == ActionResult.ATE_FOOD:
-            return ts.transition(self._get_state(), reward= 10, discount=0.9)
+            return ts.transition(self._get_state(), reward=self._reward_on_apple, discount=self._discount)
         elif result == ActionResult.STEPPED_CLOSER:
-            return ts.transition(self._get_state(), reward=  1, discount=0.9)
+            return ts.transition(self._get_state(), reward=self._reward_on_step_closer, discount=self._discount)
         elif result == ActionResult.STEPPED_FURTHER:
-            return ts.transition(self._get_state(), reward= -1, discount=0.9)
+            return ts.transition(self._get_state(), reward=self._reward_on_step_further, discount=self._discount)
         else:
             raise ValueError(f'Unknown result: {result}')
 
@@ -316,13 +333,29 @@ class PySnakeGameEnv(py_environment.PyEnvironment):
         return image.astype(np.uint8)
 
 class ConvPySnakeGameEnv(PySnakeGameEnv):
-    def __init__(self, board_shape : Tuple[int] = (16, 16), life_updater:BaseLifeUpdater=None):
-        super().__init__(board_shape=board_shape, life_updater=life_updater)
+    def __init__(self, 
+                 board_shape : Tuple[int], 
+                 observation_spec_shape : Tuple[int],
+                 life_updater:BaseLifeUpdater,
+                 discount:float,
+                 reward_on_death:float,
+                 reward_on_apple:float,
+                 reward_on_step_closer:float,
+                 reward_on_step_further:float):
+        super().__init__(board_shape=board_shape, 
+                         life_updater=life_updater,
+                         discount=discount,
+                         reward_on_death=reward_on_death,
+                         reward_on_apple=reward_on_apple,
+                         reward_on_step_closer=reward_on_step_closer,
+                         reward_on_step_further=reward_on_step_further)
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(), dtype=np.int32, minimum=0, maximum=3, name='action'
         )
         self._observation_spec = array_spec.BoundedArraySpec(
-            shape=(board_shape[0] + 1, board_shape[0] + 1, 1), dtype=np.float32, minimum=0, maximum=1, name='observation'
+            shape=observation_spec_shape,
+            dtype=np.float32, 
+            minimum=0, maximum=1, name='observation'
         )
 
         self._HEAD_TOKEN = 1
@@ -350,8 +383,8 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
         maxy, maxx = pady + hy + self._observation_spec.shape[0] // 2 + 1, padx + hx + self._observation_spec.shape[1] // 2 + 1
         
         state = state[miny:maxy,minx:maxx]
-        state = np.expand_dims(state, 2)
-        return state / 3 # Divide by 3 to normalize it 
+        state = np.expand_dims(state, -1)
+        return state / 3# Divide by 3 to normalize it 
 
     def render(self, window_size=640, rotate:bool=False):
         BACKGROUND_COLOUR = (50, 50, 50)

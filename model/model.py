@@ -24,7 +24,7 @@ except ModuleNotFoundError:
     from utils.my_checkpointer import MyCheckpointer
     from .model_config import ModelConfig, LinearModelConfig, ConvModelConfig, ConvLayerParameter
 
-def build_model(layer_params, num_actions):
+def build_linear_model(layer_params, num_actions):
     print(f'Building sequential dense model...')
     def dense_layer(num_units):
         activation = None
@@ -67,43 +67,14 @@ def build_conv_model(config : ConvModelConfig):
     qnet = sequential.Sequential(layers)
     return qnet
 
-def get_agent(model_config : ModelConfig, environment, learning_rate, return_q_net:bool=False):
-    assert isinstance(model_config, ModelConfig), 'Parameter model_config must inherit from ModelConfig'
-    assert isinstance(environment, tf_py_environment.TFPyEnvironment), 'Environment must be of type TFPyEnvironment'
-    assert learning_rate > 0, 'Learning rate must be greater than zero (0)'
-    
-    if isinstance(model_config, LinearModelConfig):
-        num_actions  = model_config.output_dims
-        assert num_actions > 0, f'Number of actions must be greater than zero (0)'
-        
-        layer_params = model_config.layer_dims
-        assert len(layer_params) > 0, 'There must be one (1) or more layers'
-
-        qnet = build_model(layer_params, num_actions)
-    elif isinstance(model_config, ConvModelConfig):
-        qnet = build_conv_model(model_config)
-    else:
-        raise RuntimeError(f'Unknown config: {model_config}')
-
-    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-    train_step_counter = tf.Variable(0)
-    agent = dqn_agent.DqnAgent(
-        environment.time_step_spec(),
-        environment.action_spec(),
-        q_network=qnet,
-        optimizer=optimizer,
-        td_errors_loss_fn=common.element_wise_squared_loss,
-        train_step_counter=train_step_counter,
-    )
-    agent.initialize()
-    agent.train = common.function(agent.train)
-    agent.train_step_counter.assign(0)
-    if return_q_net:
-        return agent, qnet
-    return agent
-
-def get_policy_saver(agent : dqn_agent.DqnAgent, model_config : ModelConfig):
-    return MyPolicySaver(agent, model_config)
+def get_policy_saver(agent : dqn_agent.DqnAgent, 
+                     model_config : ModelConfig,
+                     policy_folder_name : str,
+                     config_file_name : str):
+    return MyPolicySaver(agent, 
+                         model_config,
+                         policy_name=policy_folder_name,
+                         config_name=config_file_name)
 
 def load_model(model_name : str):
     policy = tf.compat.v2.saved_model.load(model_name)
@@ -127,7 +98,6 @@ if __name__ == '__main__':
     config = ConvModelConfig(
         (32, 32), 
         [
-            ConvLayerParameter('conv2d', 3, (5, 5), (1, 1), (0, 0), 'relu'),
             ConvLayerParameter('conv2d', 3, (5, 5), (1, 1), (0, 0), 'relu'),
             ConvLayerParameter('conv2d', 3, (5, 5), (1, 1), (0, 0), 'relu'),
             ConvLayerParameter('conv2d', 3, (5, 5), (1, 1), (0, 0), 'relu'),

@@ -20,7 +20,7 @@ def create_policy_eval_video(policy, filename, env, py_env,
                             num_episodes=5, 
                             fps=30,
                             append_score:bool=False):
-
+    
     frame_buffer = []
     rewards = []
     for episode in range(num_episodes):
@@ -45,7 +45,17 @@ def create_policy_eval_video(policy, filename, env, py_env,
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    with imageio.get_writer(filename, fps=fps) as video:
-        for frame in frame_buffer:
-            video.append_data(frame)
-    print(f'Generated {filename}: {len(frame_buffer)} frames, {len(frame_buffer) / fps:.2f}s')
+    try:
+        with imageio.get_writer(filename, fps=fps) as video:
+            for frame in frame_buffer:
+                video.append_data(frame)
+        print(f'Generated {filename}: {len(frame_buffer)} frames, {len(frame_buffer) / fps:.2f}s')
+    except Exception as e:
+        print(f'Failed to generate mp4, imageio-ffmpeg probably missing, downloading and trying again')
+        imageio.plugins.ffmpeg.download()
+        with imageio.get_writer(filename, fps=fps) as video:
+            for frame in frame_buffer:
+                video.append_data(frame)
+        print(f'Generated {filename}: {len(frame_buffer)} frames, {len(frame_buffer) / fps:.2f}s')
+    
+        

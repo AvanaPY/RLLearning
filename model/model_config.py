@@ -6,9 +6,12 @@ from collections import namedtuple
 ConvLayerParameter = namedtuple('ConvolutionalLayerParameter', 'type filters kernel_size strides paddings activation')
 
 class ModelConfig(metaclass=ABCMeta):
+    """
+        Remember to overwrite save_as_json(self, path : str)!
+    """
     def __init___(self, *args, **kwargs):
         pass
-
+    
     def __repr__(self):
         return str(self)
 
@@ -23,7 +26,9 @@ class ModelConfig(metaclass=ABCMeta):
             json_obj = load(f)
         
         typ = json_obj['type']
-        klass = globals()[typ]
+        subclasses = ModelConfig.__subclasses__()
+        subclasses = {s.__name__ : s for s in subclasses}
+        klass = subclasses[typ]
         m_config = klass(**(json_obj['parameters']))
         return m_config
 

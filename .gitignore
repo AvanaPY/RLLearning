@@ -1,5 +1,5 @@
 mp4
-policies
+policies.*
 .vscode
 *.pyc
 ckpts
