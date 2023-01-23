@@ -8,6 +8,7 @@ import cv2
 from enum import IntEnum
 from collections import namedtuple
 from functools import reduce
+import json
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from tf_agents.environments import py_environment
@@ -16,6 +17,7 @@ from tf_agents.environments import tf_environment
 from tf_agents.specs import array_spec
 from tf_agents.environments import utils
 from tf_agents.trajectories import time_step as ts
+
 
 try:
     from environments.snake_game.enums import SnakeCellState, Direction, ActionResult
@@ -43,8 +45,9 @@ def ensure_odd(value : int, offset : int):
     return value
 
 class SnakeGame:
-    def __init__(self,  board_shape : Tuple[int] = (16, 10), 
-                        life_updater : BaseLifeUpdater = None) -> None:
+    def __init__(self,  
+            board_shape : Tuple[int] = (16, 10), 
+            life_updater : BaseLifeUpdater = None) -> None:
         self._board_shape = board_shape
         self._life_updater = ResetWhenAppleEatenLifeUpdater(200) if life_updater is None else life_updater
         #--------------------------State Related----------------------#
@@ -168,13 +171,14 @@ class SnakeGame:
         print(' ' + '\u203e' * self._board_shape[1] * 2 + ' ')
 
 class PySnakeGameEnv(py_environment.PyEnvironment):
-    def __init__(self, board_shape : Tuple[int], 
-                 life_updater:BaseLifeUpdater,
-                 discount:float,
-                 reward_on_death:float,
-                 reward_on_apple:float,
-                 reward_on_step_closer:float,
-                 reward_on_step_further:float):
+    def __init__(self, 
+            board_shape : Tuple[int], 
+            life_updater:BaseLifeUpdater,
+            discount:float,
+            reward_on_death:float,
+            reward_on_apple:float,
+            reward_on_step_closer:float,
+            reward_on_step_further:float):
         super().__init__()
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(), dtype=np.int32, minimum=0, maximum=3, name='action'
@@ -187,15 +191,26 @@ class PySnakeGameEnv(py_environment.PyEnvironment):
             life_updater=life_updater
         )
         self._episode_ended = False
+
+        self._board_shape = board_shape
+        self._life_updater = life_updater
         self._discount = discount
-        
         self._reward_on_death = reward_on_death
         self._reward_on_apple = reward_on_apple
         self._reward_on_step_closer = reward_on_step_closer
         self._reward_on_step_further = reward_on_step_further
         
     def deep_copy(self):
-        raise NotImplementedError(f'Deep copying of {self} is not implemented')
+        raise NotImplementedError(f'Deeop copying is not implemented for class {self.__class__.__name__}')
+
+    def save_config_to_folder(self, folder : str):
+        raise NotImplementedError(f'Saving configuration is not implemented for class {self.__class__.__name__}')
+
+    @staticmethod
+    def load_config(path : str):
+        with open(path, 'r') as f:
+            conf = json.load(f)
+        return conf
 
     def action_spec(self):
         return self._action_spec
@@ -349,6 +364,7 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
                          reward_on_apple=reward_on_apple,
                          reward_on_step_closer=reward_on_step_closer,
                          reward_on_step_further=reward_on_step_further)
+        self.observation_spec_shape = observation_spec_shape
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(), dtype=np.int32, minimum=0, maximum=3, name='action'
         )
@@ -364,9 +380,31 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
 
     def deep_copy(self):
         return ConvPySnakeGameEnv(
-            self._game._board_shape,
-            self._game._life_updater
+            board_shape=self._game._board_shape,
+            observation_spec_shape=self.observation_spec_shape,
+            life_updater=self._game._life_updater,
+            discount=self._discount,
+            reward_on_death=self._reward_on_death,
+            reward_on_apple=self._reward_on_apple,
+            reward_on_step_closer =self._reward_on_step_closer,
+            reward_on_step_further=self._reward_on_step_further
         )
+
+    def save_config_to_folder(self, folder : str):
+        config_path = os.path.join(folder, 'gameconfig.conf')
+        config = {
+            "board_shape" : self._board_shape,
+            "observation_spec_shape" : self.observation_spec_shape,
+            "discount" : self._discount,
+            "reward_on_death" : self._reward_on_death,
+            "reward_on_apple" : self._reward_on_apple,
+            "reward_on_step_closer" : self._reward_on_step_closer,
+            "reward_on_step_further" : self._reward_on_step_further
+        }
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        with open(config_path, 'w+') as f:
+            json.dump(config, f)
 
     def _get_state(self):
         state = np.zeros(shape=self._game._board_shape, dtype=np.float32)

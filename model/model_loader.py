@@ -34,7 +34,7 @@ def get_agent(config : ModelConfig,
         config : ResidualModelConfig = config
         
         input_tensor_spec = BoundedArraySpec(
-            shape=config.input_shape, dtype=np.float32,
+            shape=config.input_dims, dtype=np.float32,
             minimum=-1, maximum=1
         )
         qnet = StureModel(

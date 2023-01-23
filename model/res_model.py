@@ -22,7 +22,7 @@ class ResidualModelConfig(ModelConfig):
                  num_filters : int, 
                  kernel_size : int,
                  strides : int,
-                 input_shape : Tuple[int]):
+                 input_dims : Tuple[int]):
         super().__init__()
         self.num_residual_layers = num_residual_layers
         self.num_residual_filters = num_residual_filters
@@ -31,7 +31,7 @@ class ResidualModelConfig(ModelConfig):
         self.strides = strides
         self.residual_kernel_size = residual_kernel_size
         self.residual_strides = residual_strides
-        self.input_shape = input_shape        
+        self.input_dims = input_dims        
                 
     def __str__(self):
         s = f'ResidualModelConfig'
@@ -57,7 +57,7 @@ class ResidualModelConfig(ModelConfig):
                     "strides" : self.strides,
                     "residual_kernel_size" : self.residual_kernel_size,
                     "residual_strides" : self.residual_strides,
-                    "input_shape" : self.input_shape,
+                    "input_dims" : self.input_dims,
                 }
             }, f)
             

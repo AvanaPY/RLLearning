@@ -45,7 +45,7 @@ initial_collect_steps       = 1_000
 collect_steps_per_iteration = 1
 replay_buffer_max_length    = 100_000
 
-batch_size    = 16
+batch_size    = 4
 learning_rate = 1e-6
 decay_steps   = 1_000
 decay_rate    = 0.99
@@ -54,57 +54,75 @@ PREFETCH_SIZE = tf.data.AUTOTUNE
 
 log_interval  = 100
 checkpoint_interval = 1_000
-eval_video_interval = 5_000
+eval_video_interval = 1_000
 board_shape = (32, 32)
 conv_observation_spec_shape = (33, 33, 1) 
 
 # StureModel parameters
-num_residual_layers = 5    # Our residual layers
-num_residual_filters = 64
-residual_kernel_size = 5
+num_residual_layers = 4    # Our residual layers
+num_residual_filters = 8
+residual_kernel_size = 7
 residual_strides = 1        
 num_filters = num_residual_filters # Initial Conv2d layer
-kernel_size = 3
+kernel_size = 7
 strides = 1
 
-# Path parameters
-CHECKPOINT_FOLDER_NAME  = 'ckpts'
-POLICIES_FOLDER_NAME    = 'policies.snake'
-MP4_FOLDER_NAME         = 'mp4'
-
-############################
+# Path constants
+MODELS_FOLDER_PATH      = 'models'                  # This will create a folder structure of:  models
+CHECKPOINT_FOLDER_NAME  = 'ckpts'                   #                                               |--ckpts
+                                                    #                                               |       |--ckpt
+POLICIES_FOLDER_NAME    = 'policies.snake'          #                                               |--policies.snake
+                                                    #                                               |       |--policy
+MP4_FOLDER_NAME         = 'mp4'                     #                                               |--mp4
+                                                    #                                               |       |--idkdjlfkdj.mp4
 
 # check for gpu 
 gpus = tf.config.list_physical_devices('GPU')
 if len(gpus) > 0:
     tf.config.experimental.set_memory_growth(gpus[0], True)
 else:
-    print(f'No GPU support! Exiting')
-    exit(0)
+    print(f'No GPU support!')
 
 # Build or load in the model
-model_path = os.path.join(CHECKPOINT_FOLDER_NAME, '2023_01_21__03_11_42')
-if os.path.exists(model_path):
+
+MODEL_LOAD_NAME = '2023_01_23__14_44_28'
+MODEL_LOAD_PATH = os.path.join(MODELS_FOLDER_PATH, MODEL_LOAD_NAME)
+MODEL_LOAD_CKPT_PATH = os.path.join(MODEL_LOAD_PATH, CHECKPOINT_FOLDER_NAME)
+TO_LOAD_MODEL = os.path.exists(MODEL_LOAD_PATH)
+
+if TO_LOAD_MODEL:
+    model_name = MODEL_LOAD_NAME
+else:
+    model_name = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
+
+# Path variables
+model_path   = os.path.join(MODELS_FOLDER_PATH, model_name)
+ckpt_dir     = os.path.join(model_path, CHECKPOINT_FOLDER_NAME)
+policies_dir = os.path.join(model_path, POLICIES_FOLDER_NAME)
+mp4_dir      = os.path.join(model_path, MP4_FOLDER_NAME)
+
+# Load or create a model
+if TO_LOAD_MODEL:
     print(f'Loading model...')
     model_config, train_py_env, train_env, agent, checkpointer \
-        = load_checkpoint_from_path(model_path, learning_rate=learning_rate) 
+        = load_checkpoint_from_path(MODEL_LOAD_PATH, learning_rate=learning_rate) 
     global_step = tf.compat.v1.train.get_global_step()
     eval_py_env = train_py_env.deep_copy()
     eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
-    model_name = os.path.split(model_path)[1]
-    ckpt_dir = model_path
 else:
     print(f'Creating new model.')
     train_py_env = ConvPySnakeGameEnv(
         board_shape=board_shape,
         observation_spec_shape=conv_observation_spec_shape,
-        life_updater=ResetWhenAppleEatenLifeUpdater(400),
-        reward_on_death=-1,
-        reward_on_apple= 1,
-        reward_on_step_closer = 0.5,
-        reward_on_step_further=-0.5    
+        life_updater=ResetWhenAppleEatenLifeUpdater(1000),
+        discount=0.9,
+        reward_on_death=-20,
+        reward_on_apple= 20,
+        reward_on_step_closer = 1,
+        reward_on_step_further=-1    
     )
     eval_py_env = train_py_env.deep_copy()
+    train_py_env.save_config_to_folder(model_path)
 
     train_env = tf_py_environment.TFPyEnvironment(train_py_env)
     eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
@@ -148,10 +166,8 @@ else:
                             return_q_net=True)
     qnet.summary()
 
-    model_name = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-
-    # Create the checkpointer
-    ckpt_dir = os.path.join(CHECKPOINT_FOLDER_NAME, model_name)
+    
+# 
 
 checkpointer = create_checkpointer(
     ckpt_dir=ckpt_dir,
@@ -226,8 +242,8 @@ MP4_MODEL_NAME = os.path.join(MP4_FOLDER_NAME, model_name)
 
 print(f'Training agent {model_name} :: Started at {start_time_str}')
 print(f'\tCheckpoint:  {ckpt_dir}')
-print(f'\tPolicies:    {POLICIES_MODEL_NAME}')
-print(f'\tMP4s:        {MP4_MODEL_NAME}')
+print(f'\tPolicies:    {policies_dir}')
+print(f'\tMP4s:        {mp4_dir}')
 print(f'\tTotal train steps: {agent.train_step_counter.numpy():11,d}')
 
 previous_reward = -np.inf
@@ -248,7 +264,7 @@ for iteration in range(1, num_iterations + 1):
 
     if step % checkpoint_interval == 0:
         episode_model_name = f'policy_iter_{step}'
-        episode_model_path = os.path.join(POLICIES_MODEL_NAME, episode_model_name)
+        episode_model_path = os.path.join(policies_dir, episode_model_name)
         
         # saver.save(episode_model_path)
         checkpointer.save(global_step)
@@ -258,9 +274,9 @@ for iteration in range(1, num_iterations + 1):
         print(f'Generating evaluation video...')
         create_policy_eval_video(
             agent.policy, 
-            os.path.join(MP4_MODEL_NAME, f'step_{step}_'),
+            os.path.join(mp4_dir, f'step_{step}_'),
             eval_env, 
             eval_py_env, 
             num_episodes=1, 
-            fps=60,
+            fps=30,
             append_score=True)
