@@ -45,23 +45,23 @@ initial_collect_steps       = 1_000
 collect_steps_per_iteration = 1
 replay_buffer_max_length    = 100_000
 
-batch_size    = 4
+batch_size    = 8
 learning_rate = 1e-6
-decay_steps   = 1_000
-decay_rate    = 0.99
+decay_steps   = 10_000
+decay_rate    = 0.95
 NUM_PAR_CALLS = tf.data.AUTOTUNE
 PREFETCH_SIZE = tf.data.AUTOTUNE
 
 log_interval  = 100
 checkpoint_interval = 1_000
-eval_video_interval = 1_000
+eval_video_interval = 5_000
 board_shape = (32, 32)
 conv_observation_spec_shape = (33, 33, 1) 
 
 # StureModel parameters
-num_residual_layers = 4    # Our residual layers
-num_residual_filters = 8
-residual_kernel_size = 7
+num_residual_layers = 5    # Our residual layers
+num_residual_filters = 128
+residual_kernel_size = 5
 residual_strides = 1        
 num_filters = num_residual_filters # Initial Conv2d layer
 kernel_size = 7
@@ -85,7 +85,7 @@ else:
 
 # Build or load in the model
 
-MODEL_LOAD_NAME = '2023_01_23__14_44_28'
+MODEL_LOAD_NAME = '2023_01_24__17_08_52'
 MODEL_LOAD_PATH = os.path.join(MODELS_FOLDER_PATH, MODEL_LOAD_NAME)
 MODEL_LOAD_CKPT_PATH = os.path.join(MODEL_LOAD_PATH, CHECKPOINT_FOLDER_NAME)
 TO_LOAD_MODEL = os.path.exists(MODEL_LOAD_PATH)
@@ -114,7 +114,7 @@ else:
     train_py_env = ConvPySnakeGameEnv(
         board_shape=board_shape,
         observation_spec_shape=conv_observation_spec_shape,
-        life_updater=ResetWhenAppleEatenLifeUpdater(1000),
+        life_updater=ResetWhenAppleEatenLifeUpdater(200),
         discount=0.9,
         reward_on_death=-20,
         reward_on_apple= 20,
@@ -153,7 +153,7 @@ else:
         num_filters=num_filters,
         kernel_size=kernel_size,
         strides=strides,
-        input_shape=train_py_env.observation_spec().shape
+        input_dims=train_py_env.observation_spec().shape
     )
 
     global_step = tf.compat.v1.train.get_or_create_global_step()
