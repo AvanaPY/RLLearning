@@ -426,18 +426,24 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
 
     def render(self, window_size=640, rotate:bool=False):
         BACKGROUND_COLOUR = (50, 50, 50)
-        TAIL_COLOUR = (120, 120, 255)
         HEAD_COLOUR = (120, 120, 200)
+        TAIL_COLOUR = (145, 255, 255)
         FOOD_COLOUR = (255, 100, 100)
+        
+        fy, fx = self._game._food
+        INNER_FACTOR = 0.05
+
         image = np.zeros(shape=(window_size, window_size, 3))
-        image[:,:] = BACKGROUND_COLOUR
         block_size = (image.shape[0] // self._game._board_shape[0], image.shape[1] // self._game._board_shape[1])
 
-        fy, fx = self._game._food
-        image[fy*block_size[0]:(fy+1)*block_size[0],fx*block_size[1]:(fx+1)*block_size[1]] = FOOD_COLOUR
+        image[:,:] = BACKGROUND_COLOUR
+        image[fy*block_size[0] : (fy+1)*block_size[0],
+              fx*block_size[1] : (fx+1)*block_size[1]] = FOOD_COLOUR
+        
         for ty, tx in self._game._state:
-            image[ty*block_size[0]:(ty+1)*block_size[0],tx*block_size[1]:(tx+1)*block_size[1]] = TAIL_COLOUR
-
+            image[ty*block_size[0] : (ty+1)*block_size[0],
+                  tx*block_size[1] : (tx+1)*block_size[1]] = TAIL_COLOUR
+            
         # Render what he can see
         state = self._get_state()
         h, w, _ = state.shape
@@ -450,12 +456,11 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.5
         text_colour = (255, 255, 255)
-        image = cv2.putText(image, f'Score: {self._game._score}', 
-                                (20, 40), 
-                                font, font_scale, text_colour, 1, cv2.LINE_AA)
-
-        image = cv2.putText(image, f'Steps: {self._game._steps_left}',
+        image = cv2.putText(image, f'Life:  {self._game._steps_left}',
                                 (20, 20), 
+                                font, font_scale, text_colour, 1, cv2.LINE_AA)
+        image = cv2.putText(image, f'Score: {self._game._score}', 
+                                (20, 20 + 20), 
                                 font, font_scale, text_colour, 1, cv2.LINE_AA)
         
         # This is fucking bad design man
