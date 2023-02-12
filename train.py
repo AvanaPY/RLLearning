@@ -25,6 +25,7 @@ from tf_agents.utils import common
 
 from environments.snake_game import PySnakeGameEnv
 from environments.snake_game import ConvPySnakeGameEnv
+from environments.snake_game import ConvCenteredPySnakeGameEnv
 from environments.snake_game import AdditiveWhenAppleEatenLifeUpdater
 from environments.snake_game import ResetWhenAppleEatenLifeUpdater
 from helpers import compute_avg_return
@@ -45,10 +46,10 @@ initial_collect_steps       = 1_000
 collect_steps_per_iteration = 1
 replay_buffer_max_length    = 100_000
 
-batch_size    = 8
-learning_rate = 1e-6
+batch_size    = 32
+learning_rate = 1e-7
 decay_steps   = 10_000
-decay_rate    = 0.95
+decay_rate    = 0.99
 NUM_PAR_CALLS = tf.data.AUTOTUNE
 PREFETCH_SIZE = tf.data.AUTOTUNE
 
@@ -59,9 +60,9 @@ board_shape = (32, 32)
 conv_observation_spec_shape = (33, 33, 1) 
 
 # StureModel parameters
-num_residual_layers = 5    # Our residual layers
-num_residual_filters = 128
-residual_kernel_size = 5
+num_residual_layers = 12    # Our residual layers
+num_residual_filters = 48
+residual_kernel_size = 3
 residual_strides = 1        
 num_filters = num_residual_filters # Initial Conv2d layer
 kernel_size = 7
@@ -111,15 +112,25 @@ if TO_LOAD_MODEL:
     eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 else:
     print(f'Creating new model.')
+    # train_py_env = ConvCenteredPySnakeGameEnv(
+    #     board_shape=board_shape,
+    #     observation_spec_shape=conv_observation_spec_shape,
+    #     life_updater=ResetWhenAppleEatenLifeUpdater(500),
+    #     discount=0.9,
+    #     reward_on_death=-20,
+    #     reward_on_apple= 20,
+    #     reward_on_step_closer = 1,
+    #     reward_on_step_further=-1    
+    # )
     train_py_env = ConvPySnakeGameEnv(
         board_shape=board_shape,
-        observation_spec_shape=conv_observation_spec_shape,
-        life_updater=ResetWhenAppleEatenLifeUpdater(200),
+        observation_spec_shape=(board_shape[0], board_shape[1], 1),
+        life_updater=ResetWhenAppleEatenLifeUpdater(500),
         discount=0.9,
+        reward_on_apple=20,
         reward_on_death=-20,
-        reward_on_apple= 20,
-        reward_on_step_closer = 1,
-        reward_on_step_further=-1    
+        reward_on_step_closer=1,
+        reward_on_step_further=-1
     )
     eval_py_env = train_py_env.deep_copy()
     train_py_env.save_config_to_folder(model_path)
@@ -165,8 +176,6 @@ else:
                             decay_stair_case=True,
                             return_q_net=True)
     qnet.summary()
-
-    
 # 
 
 checkpointer = create_checkpointer(

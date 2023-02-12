@@ -12,27 +12,32 @@ from model.model_config import LinearModelConfig
 from model.model_config import ConvModelConfig
 from model.res_model import ResidualModelConfig
 from utils.my_checkpointer import MyCheckpointLoader
-from environments.snake_game import PySnakeGameEnv, ConvPySnakeGameEnv
+from environments.snake_game import PySnakeGameEnv, ConvPySnakeGameEnv, ConvCenteredPySnakeGameEnv
 from environments.snake_game.life_updater import ResetWhenAppleEatenLifeUpdater
 
 import json
 
-def get_pyenvironment_from_model_config(mc : ModelConfig, game_config : Dict[str, Any]):
-    print(f'HARD CODING `life_updater` to ResetWhenAppleEatenLifeUpdater(500)')
+
+def get_pyenvironment_from_model_config(mc : ModelConfig, env_config : Dict[str, Any]):
+    print(f'helpers::get_pyenvironment_from_model_config: Set `life_updater` to ResetWhenAppleEatenLifeUpdater(500)')
+    environment_name = env_config['environment']
+    game_config = env_config['environment_configuration']
     game_config['life_updater'] = ResetWhenAppleEatenLifeUpdater(500)
-    if isinstance(mc, LinearModelConfig):
+    
+    if environment_name == 'PySnakeGameEnv':
         mc : LinearModelConfig = mc
         # Create environment
         return PySnakeGameEnv(**game_config)
 
-    elif isinstance(mc, ConvModelConfig):
-        mc : ConvModelConfig = mc
+    elif environment_name == 'ConvPySnakeGameEnv':
+        mc : Union[ConvModelConfig, ResidualModelConfig] = mc
         assert game_config['observation_spec_shape'] == mc.input_dims, f'Environment Observation Spec Shape does not match model configuration input dims:\nFound Observation Spec Shape\n\t{tuple(game_config["observation_spec_shape"])}\nReceived input dims\n\t{tuple(mc.input_dims)}'
         return ConvPySnakeGameEnv(**game_config)
-    elif isinstance(mc, ResidualModelConfig):
+    
+    elif environment_name == 'ConvCenteredPySnakeGameEnv':
         mc : ResidualModelConfig = mc
         assert game_config['observation_spec_shape'] == mc.input_dims, f'Environment Observation Spec Shape does not match model configuration input dims:\nFound Observation Spec Shape\n\t{tuple(game_config["observation_spec_shape"])}\nReceived input dims\n\t{tuple(mc.input_dims)}'
-        return ConvPySnakeGameEnv(**game_config)
+        return ConvCenteredPySnakeGameEnv(**game_config)
     else:
         raise RuntimeError(f'Unknown ModelConfig: {mc}')
 
@@ -40,7 +45,7 @@ def load_checkpoint_from_path(model_path : str,
                               learning_rate : Optional[float]=None) -> Tuple[ModelConfig, PySnakeGameEnv, TFPyEnvironment, DqnAgent, MyCheckpointLoader]:
     if learning_rate is None:
         learning_rate = 1e-10
-        print(f'Set `learning_rate` to {learning_rate}!')
+        print(f'helpers::load_checkpoint_from_path: Set `learning_rate` to {learning_rate}!')
     
     # This is bad
     ckpt_path         = os.path.join(model_path, 'ckpts')

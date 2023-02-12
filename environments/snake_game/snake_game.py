@@ -393,13 +393,131 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
     def save_config_to_folder(self, folder : str):
         config_path = os.path.join(folder, 'gameconfig.conf')
         config = {
-            "board_shape" : self._board_shape,
-            "observation_spec_shape" : self.observation_spec_shape,
-            "discount" : self._discount,
-            "reward_on_death" : self._reward_on_death,
-            "reward_on_apple" : self._reward_on_apple,
-            "reward_on_step_closer" : self._reward_on_step_closer,
-            "reward_on_step_further" : self._reward_on_step_further
+            "environment":self.__class__.__name__,
+            "environment_configuration" : {
+                "board_shape" : self._board_shape,
+                "observation_spec_shape" : self.observation_spec_shape,
+                "discount" : self._discount,
+                "reward_on_death" : self._reward_on_death,
+                "reward_on_apple" : self._reward_on_apple,
+                "reward_on_step_closer" : self._reward_on_step_closer,
+                "reward_on_step_further" : self._reward_on_step_further
+            }
+        }
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        with open(config_path, 'w+') as f:
+            json.dump(config, f)
+
+    def _get_state(self):
+        state = np.zeros(shape=self._game._board_shape, dtype=np.float32)
+        
+        state[self._game._food] = self._FOOD_TOKEN
+        state[self._game.head]  = self._HEAD_TOKEN
+        for t in self._game._state[1:]:
+            state[t] = self._TAIL_TOKEN
+        
+        state = np.expand_dims(state, -1)
+        return state / 3# Divide by 3 to normalize it 
+
+    def render(self, window_size=640, rotate:bool=False):
+        BACKGROUND_COLOUR = (50, 50, 50)
+        HEAD_COLOUR = (120, 255, 120)
+        TAIL_COLOUR = (145, 255, 255)
+        FOOD_COLOUR = (255, 100, 100)
+        
+        hy, hx = self._game.head
+        fy, fx = self._game._food
+        INNER_FACTOR = 0.05
+
+        image = np.zeros(shape=(window_size, window_size, 3))
+        block_size = (image.shape[0] // self._game._board_shape[0], image.shape[1] // self._game._board_shape[1])
+
+        image[:,:] = BACKGROUND_COLOUR
+        image[fy*block_size[0] : (fy+1)*block_size[0],
+              fx*block_size[1] : (fx+1)*block_size[1]] = FOOD_COLOUR
+        
+        for ty, tx in self._game._state:
+            image[ty*block_size[0] : (ty+1)*block_size[0],
+                  tx*block_size[1] : (tx+1)*block_size[1]] = TAIL_COLOUR
+        
+        image[hy*block_size[0] : (hy+1)*block_size[0],
+              hx*block_size[1] : (hx+1)*block_size[1]] = HEAD_COLOUR
+        
+        
+        # Some cool text
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        text_colour = (255, 255, 255)
+        image = cv2.putText(image, f'Life:  {self._game._steps_left}',
+                                (20, 20), 
+                                font, font_scale, text_colour, 1, cv2.LINE_AA)
+        image = cv2.putText(image, f'Score: {self._game._score}', 
+                                (20, 20 + 20), 
+                                font, font_scale, text_colour, 1, cv2.LINE_AA)
+        
+        # This is fucking bad design man
+        if rotate:
+            image = np.rot90(image, k=1, axes=(0,1))
+            image = np.flip(image, axis=0)
+        return image.astype(np.uint8)
+    
+class ConvCenteredPySnakeGameEnv(PySnakeGameEnv):
+    def __init__(self, 
+                 board_shape : Tuple[int], 
+                 observation_spec_shape : Tuple[int],
+                 life_updater:BaseLifeUpdater,
+                 discount:float,
+                 reward_on_death:float,
+                 reward_on_apple:float,
+                 reward_on_step_closer:float,
+                 reward_on_step_further:float):
+        super().__init__(board_shape=board_shape, 
+                         life_updater=life_updater,
+                         discount=discount,
+                         reward_on_death=reward_on_death,
+                         reward_on_apple=reward_on_apple,
+                         reward_on_step_closer=reward_on_step_closer,
+                         reward_on_step_further=reward_on_step_further)
+        self.observation_spec_shape = observation_spec_shape
+        self._action_spec = array_spec.BoundedArraySpec(
+            shape=(), dtype=np.int32, minimum=0, maximum=3, name='action'
+        )
+        self._observation_spec = array_spec.BoundedArraySpec(
+            shape=observation_spec_shape,
+            dtype=np.float32, 
+            minimum=0, maximum=1, name='observation'
+        )
+
+        self._HEAD_TOKEN = 1
+        self._TAIL_TOKEN = 2
+        self._FOOD_TOKEN = 3
+        
+    def deep_copy(self):
+        return ConvCenteredPySnakeGameEnv(
+            board_shape=self._game._board_shape,
+            observation_spec_shape=self.observation_spec_shape,
+            life_updater=self._game._life_updater,
+            discount=self._discount,
+            reward_on_death=self._reward_on_death,
+            reward_on_apple=self._reward_on_apple,
+            reward_on_step_closer =self._reward_on_step_closer,
+            reward_on_step_further=self._reward_on_step_further
+        )
+
+    def save_config_to_folder(self, folder : str):
+        config_path = os.path.join(folder, 'gameconfig.conf')
+        config = {
+            "environment":self.__class__.__name__,
+            "environment_configuration" : {
+                "board_shape" : self._board_shape,
+                "observation_spec_shape" : self.observation_spec_shape,
+                "discount" : self._discount,
+                "reward_on_death" : self._reward_on_death,
+                "reward_on_apple" : self._reward_on_apple,
+                "reward_on_step_closer" : self._reward_on_step_closer,
+                "reward_on_step_further" : self._reward_on_step_further
+            }
         }
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -422,7 +540,7 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
         
         state = state[miny:maxy,minx:maxx]
         state = np.expand_dims(state, -1)
-        return state / 3# Divide by 3 to normalize it 
+        return state / 3 # Divide by 3 to normalize it 
 
     def render(self, window_size=640, rotate:bool=False):
         BACKGROUND_COLOUR = (50, 50, 50)
@@ -470,6 +588,6 @@ class ConvPySnakeGameEnv(PySnakeGameEnv):
         return image.astype(np.uint8)
 
 if __name__ == '__main__':
-    env = ConvPySnakeGameEnv()
+    env = ConvCenteredPySnakeGameEnv()
     state = env._get_state()
     print(state)
