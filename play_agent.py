@@ -16,7 +16,7 @@ from model.model_config import LinearModelConfig
 from model.model_config import ConvModelConfig
 
 from utils.my_checkpointer import MyCheckpointLoader
-from utils.helpers import load_checkpoint_from_path
+from utils.helpers import load_checkpoint_from_path, sture_print as print
 
 STEP_WISE_FRAME_ENABLED = False
 SHOW_TEXT_ENABLED       = True
@@ -70,6 +70,8 @@ if __name__ == '__main__':
     model_name = get_model_name_from_args(args)
     model_path = os.path.join(model_folder, model_name)
     
+    print(f'Attempting to load model from "{model_path}"')
+    
     if not os.path.exists(model_path):
         raise FileNotFoundError(f'Model \"{model_path}\" does not exist.')
     
@@ -99,8 +101,11 @@ if __name__ == '__main__':
     policy = agent.policy
     
     if args.verbose:
-        print(f'Loaded {model_path}')
-        print(f'Loaded {env.__class__}')
+        parameters_in_fruit_fly = agent._q_network.count_params() / 25_000
+        print(f'Loaded Model {model_path}')
+        print(f'\tParameters in fruit-fly units: {parameters_in_fruit_fly:8,.2f}')
+        print(f'Loaded Envir {env.__class__}')
+        print(env._game)
         agent._q_network.summary()
 
     # Play the policy
@@ -113,6 +118,24 @@ if __name__ == '__main__':
     action = np.argmax(out)
     
     while running:
+        if STEP_WISE_FRAME_ENABLED:
+            waiting = True
+            while waiting:
+                event = pygame.event.wait()
+                waiting = event.type != pygame.KEYDOWN
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    STEP_WISE_FRAME_ENABLED = False
+                    
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.key == pygame.K_s:
+                    STEP_WISE_FRAME_ENABLED = True
+                elif event.key == pygame.K_t:
+                    SHOW_TEXT_ENABLED = not SHOW_TEXT_ENABLED
+                    
         # Perform action
         action = tf.constant(action, shape=(1,), dtype=np.int32)
         timestep = tf_env.step(action)
@@ -170,29 +193,15 @@ if __name__ == '__main__':
                 value_surf = font.render(f'{value:4.1f}', True, c)
                 display.blit(value_surf, (x + rx, y + ry))
             
+            if STEP_WISE_FRAME_ENABLED:
+                frame_surface = font.render(f'Key-wise stepping!', True, (255, 255, 255))
+                display.blit(frame_surface, (w-frame_surface.get_width() - 10, 20))
+        
         # This is kinda bad code but it just introduces
         # a mode where you step through the environment
         # by pressing down a key, instead of it doing it on every frame
         # (it actually just waits to go to next frame until you press a key but we don't talk about this)
-        if STEP_WISE_FRAME_ENABLED:
-            event = pygame.event.wait()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_s:
-                    STEP_WISE_FRAME_ENABLED = False
                     
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_s:
-                    STEP_WISE_FRAME_ENABLED = True
-                elif event.key == pygame.K_t:
-                    SHOW_TEXT_ENABLED = not SHOW_TEXT_ENABLED
-                    
-        if STEP_WISE_FRAME_ENABLED:
-            frame_surface = font.render(f'Key-wise stepping!', True, (255, 255, 255))
-            display.blit(frame_surface, (w-frame_surface.get_width() - 25, 20))
-        
         pygame.display.flip()
         clock.tick(FRAME_RATE)
         

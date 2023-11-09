@@ -14,12 +14,33 @@ from model.res_model import ResidualModelConfig
 from utils.my_checkpointer import MyCheckpointLoader
 from environments.snake_game import PySnakeGameEnv, ConvPySnakeGameEnv, ConvCenteredPySnakeGameEnv
 from environments.snake_game.life_updater import ResetWhenAppleEatenLifeUpdater
+from inspect import currentframe, getframeinfo, getinnerframes, getouterframes
 
 import json
 
+def sture_print(*msgs, frame = None) -> None:
+    """
+        Wrapper function for print. It prints the filename and the line number of the outer frame as well.
+        
+        Parameters
+        ----------
+        *msgs : List[str]
+            A list of messages to print
+        frame : TypeFrame
+            A frame. Deprecated and not used
+        
+        Returns
+        -------
+            None 
+    """
+    frameinfo = getouterframes(currentframe())[1]
+    frminfostr = f'[{frameinfo.filename}::{frameinfo.lineno}]'
+    print(f'{frminfostr} {msgs[0]}')
+    for msg in msgs[1:]:
+        print('-' * len(frminfostr) + msg)
 
 def get_pyenvironment_from_model_config(mc : ModelConfig, env_config : Dict[str, Any]):
-    print(f'helpers::get_pyenvironment_from_model_config: Set `life_updater` to ResetWhenAppleEatenLifeUpdater(500)')
+    sture_print(f'Set `life_updater` to ResetWhenAppleEatenLifeUpdater(500)')
     environment_name = env_config['environment']
     game_config = env_config['environment_configuration']
     game_config['life_updater'] = ResetWhenAppleEatenLifeUpdater(500)
@@ -45,7 +66,7 @@ def load_checkpoint_from_path(model_path : str,
                               learning_rate : Optional[float]=None) -> Tuple[ModelConfig, PySnakeGameEnv, TFPyEnvironment, DqnAgent, MyCheckpointLoader]:
     if learning_rate is None:
         learning_rate = 1e-10
-        print(f'helpers::load_checkpoint_from_path: Set `learning_rate` to {learning_rate}!')
+        sture_print(f'Set `learning_rate` to {learning_rate}!')
     
     # This is bad
     ckpt_path         = os.path.join(model_path, 'ckpts')

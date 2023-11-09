@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function
-
+from inspect import currentframe, getframeinfo, getinnerframes, getouterframes
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
@@ -36,9 +36,9 @@ from model import get_policy_saver
 from model.model_config import LinearModelConfig
 from model.model_config import ConvModelConfig, ConvLayerParameter
 from model.res_model import StureModel, ResidualModelConfig
-from utils.helpers import load_checkpoint_from_path
+from utils.helpers import load_checkpoint_from_path, sture_print as print
 
-print(f'TF version = {tf.version.VERSION}')
+print(f'TF version = {tf.version.VERSION}', frame=currentframe())
 
 num_iterations = 10_000_000
 
@@ -54,8 +54,8 @@ NUM_PAR_CALLS = tf.data.AUTOTUNE
 PREFETCH_SIZE = tf.data.AUTOTUNE
 
 log_interval  = 100
-checkpoint_interval = 1_000
-eval_video_interval = 5_000
+checkpoint_step_interval = 1_000
+eval_video_step_interval = 5_000
 board_shape = (32, 32)
 conv_observation_spec_shape = (33, 33, 1) 
 
@@ -82,7 +82,7 @@ gpus = tf.config.list_physical_devices('GPU')
 if len(gpus) > 0:
     tf.config.experimental.set_memory_growth(gpus[0], True)
 else:
-    print(f'No GPU support!')
+    print(f'No GPU support', frame=currentframe())
 
 # Build or load in the model
 
@@ -104,14 +104,14 @@ mp4_dir      = os.path.join(model_path, MP4_FOLDER_NAME)
 
 # Load or create a model
 if TO_LOAD_MODEL:
-    print(f'Loading model...')
+    print(f'Loading model... "{MODEL_LOAD_PATH}"', frame=currentframe())
     model_config, train_py_env, train_env, agent, checkpointer \
         = load_checkpoint_from_path(MODEL_LOAD_PATH, learning_rate=learning_rate) 
     global_step = tf.compat.v1.train.get_global_step()
     eval_py_env = train_py_env.deep_copy()
     eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 else:
-    print(f'Creating new model.')
+    print(f'Creating new model.', frame=currentframe())
     # train_py_env = ConvCenteredPySnakeGameEnv(
     #     board_shape=board_shape,
     #     observation_spec_shape=conv_observation_spec_shape,
@@ -223,14 +223,14 @@ rb_observer = reverb_utils.ReverbAddTrajectoryObserver(
 random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(),
                                                 train_env.action_spec())
 
-print(f'Collecting initial data... ({initial_collect_steps} steps)')
+print(f'Collecting initial data... ({initial_collect_steps} steps)', frame=currentframe())
 py_driver.PyDriver(
     train_py_env,
     py_tf_eager_policy.PyTFEagerPolicy(
       random_policy, use_tf_function=True),
     [rb_observer],
     max_steps=initial_collect_steps).run(train_py_env.reset())
-print(f'Done.')
+print(f'Done.', frame=currentframe())
 
 iterator = iter(replay_buffer.as_dataset(
     num_parallel_calls=NUM_PAR_CALLS,
@@ -249,11 +249,11 @@ start_time_str = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
 POLICIES_MODEL_NAME = os.path.join(POLICIES_FOLDER_NAME, model_name)
 MP4_MODEL_NAME = os.path.join(MP4_FOLDER_NAME, model_name)
 
-print(f'Training agent {model_name} :: Started at {start_time_str}')
-print(f'\tCheckpoint:  {ckpt_dir}')
-print(f'\tPolicies:    {policies_dir}')
-print(f'\tMP4s:        {mp4_dir}')
-print(f'\tTotal train steps: {agent.train_step_counter.numpy():11,d}')
+print(f'Training agent {model_name} :: Started at {start_time_str}',
+            f'\tCheckpoint:  {ckpt_dir}',
+            f'\tPolicies:    {policies_dir}',
+            f'\tMP4s:        {mp4_dir}',
+            f'\tTotal train steps: {agent.train_step_counter.numpy():11,d}', frame=currentframe())
 
 previous_reward = -np.inf
 time_step = train_py_env.reset()
@@ -269,18 +269,18 @@ for iteration in range(1, num_iterations + 1):
     step = agent.train_step_counter.numpy()
 
     if step % log_interval == 0:
-        print(f'[Iteration {iteration:>11,d} / {num_iterations:>11,d}]: Step {step:>11,d}: loss = {train_loss:7.3f}')
+        print(f'[Iteration {iteration:>11,d} / {num_iterations:>11,d}]: Step {step:>11,d}: loss = {train_loss:7.3f}', frame=currentframe())
 
-    if step % checkpoint_interval == 0:
+    if step % checkpoint_step_interval == 0:
         episode_model_name = f'policy_iter_{step}'
         episode_model_path = os.path.join(policies_dir, episode_model_name)
         
         # saver.save(episode_model_path)
         checkpointer.save(global_step)
-        print(f'Created checkpoint at step {step}...')
+        print(f'Created checkpoint at step {step}...', frame=currentframe())
     
-    if step % eval_video_interval == 0:
-        print(f'Generating evaluation video...')
+    if step % eval_video_step_interval == 0:
+        print(f'Generating evaluation video...', frame=currentframe())
         create_policy_eval_video(
             agent.policy, 
             os.path.join(mp4_dir, f'step_{step}_'),

@@ -2,6 +2,8 @@ import imageio
 import os 
 import numpy as np
 
+from utils.helpers import sture_print as print
+
 def compute_avg_return(env, policy, num_episodes=10):
     returns = []
     for i in range(num_episodes):

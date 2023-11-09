@@ -59,10 +59,13 @@ class SnakeGame:
         self._steps_left = 0
         self.reset()
         #-------------------------------------------------------------#
-        print(f'Initialized SnakeGame:')
-        print(f'\tBoard shape: {self._board_shape}')
-        print(f'\tUpdater    : {self._life_updater.__class__.__name__}')
-
+    
+    def __str__(self):
+        s = 'SnakeGame:\n'
+        s += f'\tBoard Shape: {self._board_shape}\n'
+        s += f'\tUpdater    : {self._life_updater.__class__.__name__}'
+        return s
+    
     @property
     def head(self):
         return self._state[0]
